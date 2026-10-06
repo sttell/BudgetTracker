@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# BudgetTracker data (personal finances)
+data/
+.DS_Store
+dist/

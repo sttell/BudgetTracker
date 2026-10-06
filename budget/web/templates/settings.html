@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}Настройки — Бюджет{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Настройки</h1></div>
+
+<div class="grid two" style="margin-top: 0">
+  <form class="card" method="post" action="{{ url_for('save_target') }}">
+    <h2>Таргет на месяц</h2>
+    <p class="muted" style="margin-top:0">Действует с выбранного месяца и дальше, пока не задан новый.</p>
+    <div class="form-grid">
+      <label>Месяц <input type="month" name="month" value="{{ month }}" required></label>
+      <label><span class="req">Сумма</span> <input name="amount" inputmode="decimal" required value="{{ target.amount | num if target else '' }}"></label>
+      <label>Валюта <select name="currency">{{ m.currency_options(target.currency if target else settings.base_currency) }}</select></label>
+      <div><button class="primary">Сохранить</button></div>
+    </div>
+  </form>
+
+  <form class="card" method="post" action="{{ url_for('save_currencies') }}">
+    <h2>Валюты</h2>
+    <p class="muted" style="margin-top:0">Пересчёт — по курсу НБС на дату траты с коэффициентом реального обмена (ниже).</p>
+    <div class="form-grid">
+      <label>Базовая (отображение) <select name="base_currency">{{ m.currency_options(settings.base_currency) }}</select></label>
+      <label>Ввода по умолчанию <select name="input_currency">{{ m.currency_options(settings.input_currency) }}</select></label>
+      <div><button class="primary">Сохранить</button></div>
+    </div>
+  </form>
+</div>
+
+<form class="card" method="post" action="{{ url_for('save_rates') }}" style="margin-top: 16px">
+  <h2>Реальный курс обмена</h2>
+  <p class="muted" style="margin-top:0">Укажи курс, по которому реально меняешь деньги сегодня. Приложение сохранит коэффициент к официальному курсу НБС и будет применять его ко всем датам: реальный курс = курс НБС на дату × коэффициент.</p>
+  <table>
+    <thead><tr><th>Валюта</th><th class="num">НБС сегодня</th><th class="num">Коэффициент</th><th>Реальный курс, RSD</th></tr></thead>
+    {% for r in rates %}
+    <tr>
+      <td>1 {{ r.currency }}</td>
+      <td class="num">{{ '%.4f' % r.official }}</td>
+      <td class="num">{{ '%.4f' % r.coef }}</td>
+      <td><input name="{{ r.currency }}" inputmode="decimal" value="{{ '%.2f' % r.real }}" style="width: 120px"></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div style="margin-top: 12px"><button class="primary">Сохранить</button></div>
+</form>
+
+<div class="card" style="margin-top: 16px">
+  <h2>Фиксированные ежемесячные траты</h2>
+  <p class="muted" style="margin-top:0">Списываются 1-го числа и не участвуют в дневном лимите. Изменения шаблона действуют на месяцы, где он ещё не применён; сумму в конкретном месяце правь в самой трате.</p>
+  <table>
+    <thead><tr><th>Название</th><th>Сумма</th><th>Валюта</th><th>Категория</th><th>С месяца</th><th></th></tr></thead>
+    <tbody>
+    {% for t in fixed %}
+      <tr>
+        <form method="post" action="{{ url_for('edit_fixed', fixed_id=t.id) }}" id="f-{{ t.id }}"></form>
+        <td><input form="f-{{ t.id }}" name="name" value="{{ t.name }}" required></td>
+        <td><input form="f-{{ t.id }}" name="amount" value="{{ t.amount | num }}" inputmode="decimal" required style="width: 110px"></td>
+        <td><select form="f-{{ t.id }}" name="currency">{{ m.currency_options(t.currency) }}</select></td>
+        <td><select form="f-{{ t.id }}" name="category">{{ m.category_options(t.category, '—') }}</select></td>
+        <td class="muted">{{ t.since }}</td>
+        <td class="num">
+          <button form="f-{{ t.id }}">Сохранить</button>
+          <button form="f-{{ t.id }}" class="danger" name="delete" value="1" onclick="return confirm('Удалить шаблон «{{ t.name }}»?')">Удалить</button>
+        </td>
+      </tr>
+    {% endfor %}
+      <tr>
+        <form method="post" action="{{ url_for('add_fixed') }}" id="f-new"></form>
+        <td><input form="f-new" name="name" placeholder="Квартира" required></td>
+        <td><input form="f-new" name="amount" inputmode="decimal" placeholder="1500" required style="width: 110px"></td>
+        <td><select form="f-new" name="currency">{{ m.currency_options(settings.base_currency) }}</select></td>
+        <td><select form="f-new" name="category">{{ m.category_options(None, '—') }}</select></td>
+        <td></td>
+        <td class="num"><button form="f-new" class="primary">Добавить</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="grid two">
+  <div class="card" id="rules">
+    <h2>Правила категорий</h2>
+    <p class="muted" style="margin-top:0">Если название траты содержит шаблон — категория ставится автоматически.</p>
+    <table>
+      {% for r in settings.category_rules %}
+      <tr>
+        <td>«{{ r.pattern }}»</td><td class="muted">→ {{ category_names.get(r.category, r.category) }}</td>
+        <td class="num">
+          <form class="inline" method="post" action="{{ url_for('delete_rule') }}">
+            <input type="hidden" name="pattern" value="{{ r.pattern }}"><button class="danger">×</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}<tr><td class="muted">Правил пока нет</td></tr>{% endfor %}
+    </table>
+    <form method="post" action="{{ url_for('add_rule') }}" class="form-grid" style="margin-top: 12px">
+      <label>Шаблон <input name="pattern" placeholder="maxi" required></label>
+      <label>Категория <select name="category" required>{% for c in settings.categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></label>
+      <div><button class="primary">Добавить</button></div>
+    </form>
+  </div>
+
+  <div class="card" id="categories">
+    <h2>Категории</h2>
+    <table>
+      {% for c in settings.categories %}
+      <tr>
+        <form method="post" action="{{ url_for('save_category') }}" id="c-{{ c.id }}"></form><input form="c-{{ c.id }}" type="hidden" name="id" value="{{ c.id }}">
+        <td><input form="c-{{ c.id }}" type="color" name="color" value="{{ c.color }}" aria-label="Цвет"></td>
+        <td><input form="c-{{ c.id }}" name="name" value="{{ c.name }}" required></td>
+        <td class="num"><button form="c-{{ c.id }}">Сохранить</button></td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <form method="post" action="{{ url_for('save_category') }}" id="c-new"></form>
+        <td><input form="c-new" type="color" name="color" value="#9e9e9e" aria-label="Цвет"></td>
+        <td><input form="c-new" name="name" placeholder="Новая категория" required></td>
+        <td class="num"><button form="c-new" class="primary">Добавить</button></td>
+      </tr>
+    </table>
+  </div>
+</div>
+{% endblock %}

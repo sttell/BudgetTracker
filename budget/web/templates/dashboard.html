@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}Дашборд — Бюджет{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ month | month_title }}</h1>
+  <span class="sub">{{ today | day_title }}</span>
+</div>
+
+{% if not status %}
+  <div class="card">
+    <h2>Таргет на месяц не задан</h2>
+    <p class="muted">Задай месячный таргет и фиксированные траты в <a href="{{ url_for('settings_view') }}">настройках</a> — после этого здесь появятся остаток и лимиты.</p>
+  </div>
+{% else %}
+{% set cur = status.currency %}
+<div class="grid tiles">
+  <div class="card tile hero">
+    <div class="label">Сегодня можно потратить</div>
+    <div class="value {{ 'neg' if status.today_remaining < 0 }}">{{ status.today_remaining | money }}</div>
+    <div class="hint">лимит {{ status.day_limit | money }} · потрачено {{ status.spent_today | money }}</div>
+  </div>
+  <div class="card tile">
+    <div class="label">На неделю осталось</div>
+    <div class="value {{ 'neg' if status.week_remaining < 0 }}">{{ status.week_remaining | money }}</div>
+    <div class="hint">{{ status.week_days_left }} дн. до {{ status.week_end | day_title }}</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Остаток на месяц</div>
+    <div class="value {{ 'neg' if status.month_remaining < 0 }}">{{ status.month_remaining | money }}</div>
+    <div class="hint">из {{ status.pool | money }} свободных · потрачено {{ status.spent_in_budget | money }}</div>
+    {% set pct = (status.spent_in_budget / status.pool * 100) if status.pool > 0 else 100 %}
+    <div class="progress"><span class="{{ 'over' if pct > 100 }}" style="width: {{ [pct, 100] | min }}%"></span></div>
+  </div>
+  <div class="card tile">
+    <div class="label">Таргет месяца</div>
+    <div class="value">{{ status.target | money }}</div>
+    <div class="hint">фиксированные {{ status.fixed | money }}{% if status.over_budget_total %} · сверх бюджета {{ status.over_budget_total | money }}{% endif %}</div>
+  </div>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <h2>Темп трат за месяц</h2>
+    <div class="legend">
+      <span><i style="background: var(--series-1)"></i>Потрачено нарастающим итогом</span>
+      <span><i class="dashed"></i>Равномерный план</span>
+    </div>
+    <div class="chart-box"><canvas id="pace" aria-label="Накопленные траты против равномерного плана"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Траты по дням</h2>
+    <div class="legend">
+      <span><i style="background: var(--series-1); height: 10px; width: 10px"></i>Потрачено в бюджете</span>
+      <span><i style="background: var(--critical); height: 10px; width: 10px"></i>Выше лимита</span>
+      <span><i style="background: var(--muted)"></i>Лимит дня</span>
+    </div>
+    <div class="chart-box"><canvas id="daily" aria-label="Траты по дням против дневного лимита"></canvas></div>
+  </div>
+</div>
+
+<div class="grid two">
+  <div class="card">
+    <h2>Категории за месяц <span class="muted" style="font-weight:400">без фиксированных</span></h2>
+    {% if categories %}
+    {% set top = categories[0][1] if categories[0][1] > 0 else 1 %}
+    <div class="bars">
+      {% for cat, value in categories %}
+      <div class="bar-row" title="{{ category_names.get(cat, 'Без категории') }}: {{ value | money }}">
+        <a class="name" href="{{ url_for('expenses_view', category=cat) }}">{{ category_names.get(cat, 'Без категории') }}</a>
+        <div class="track"><div class="fill" style="width: {{ [value / top * 100, 0] | max }}%"></div></div>
+        <span class="amount">{{ value | money }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty">Трат пока нет</div>{% endif %}
+  </div>
+  <div class="card">
+    <h2>Фиксированные</h2>
+    <table>
+      {% for e in fixed %}
+      <tr><td><a href="{{ url_for('day_view', day=e.date) }}">{{ e.name }}</a></td><td class="num">{{ m.amount(e) }}</td></tr>
+      {% else %}<tr><td class="muted">Нет фиксированных трат — добавь в настройках</td></tr>{% endfor %}
+    </table>
+    <h2 style="margin-top: 20px">Нерегулярные</h2>
+    <table>
+      {% for e in irregular %}
+      <tr>
+        <td class="muted">{{ e.date[8:] }}.{{ e.date[5:7] }}</td>
+        <td><a href="{{ url_for('day_view', day=e.date) }}">{{ e.name }}</a> {{ m.kind_badge(e) }}</td>
+        <td class="num">{{ m.amount(e) }}</td>
+      </tr>
+      {% else %}<tr><td class="muted">Нерегулярных трат нет</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if status %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+  window.CHART = {{ chart | tojson }};
+  window.CURRENCY = {{ status.currency | tojson }};
+</script>
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}Операции — Бюджет{% endblock %}
+{% block content %}
+{% set here = request.full_path %}
+<div class="page-head"><h1>Операции</h1></div>
+
+<form class="card" method="get" style="margin-bottom: 16px">
+  <div class="form-grid">
+    <label>С <input type="date" name="from" value="{{ date_from }}"></label>
+    <label>По <input type="date" name="to" value="{{ date_to }}"></label>
+    <label>Категория
+      <select name="category">
+        <option value="">все</option>
+        <option value="uncategorized" {{ 'selected' if filters.category == 'uncategorized' }}>Без категории</option>
+        {% for c in settings.categories %}<option value="{{ c.id }}" {{ 'selected' if filters.category == c.id }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Тип
+      <select name="kind">
+        <option value="">все</option>
+        {% for k, title in [('regular', 'Регулярные'), ('irregular', 'Нерегулярные'), ('fixed', 'Фиксированные')] %}
+        <option value="{{ k }}" {{ 'selected' if filters.kind == k }}>{{ title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Поиск <input name="q" value="{{ filters.q or '' }}" placeholder="название или комментарий"></label>
+    <div><button class="primary">Показать</button> <a class="button" href="{{ url_for('expenses_view') }}">Сброс</a></div>
+  </div>
+</form>
+
+<form class="card" method="post" action="{{ url_for('bulk_category') }}" id="bulk">
+  <input type="hidden" name="next" value="{{ here }}">
+  {% if expenses %}
+  <table>
+    <thead><tr>
+      <th><input type="checkbox" aria-label="Выбрать все" onclick="document.querySelectorAll('#bulk input[name=ids]').forEach(c => c.checked = this.checked)"></th>
+      <th>Дата</th><th class="hide-sm">Время</th><th>Название</th><th>Категория</th><th class="num">Сумма</th>
+    </tr></thead>
+    <tbody>
+      {% for e in expenses %}
+      <tr>
+        <td><input type="checkbox" name="ids" value="{{ e.id }}" aria-label="Выбрать {{ e.name }}"></td>
+        <td class="muted"><a href="{{ url_for('day_view', day=e.date) }}">{{ e.date }}</a></td>
+        <td class="muted hide-sm">{{ (e.time or '')[:5] }}</td>
+        <td>{{ e.name }} {{ m.kind_badge(e) }}{% if e.note %}<div class="muted" style="font-size:12px">{{ e.note }}</div>{% endif %}</td>
+        <td class="muted">{{ category_names.get(e.category, 'Без категории') }}</td>
+        <td class="num">{{ m.amount(e) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td></td><td colspan="4">Итого: {{ expenses | length }} трат</td><td class="num">{{ total | money }}</td></tr></tfoot>
+  </table>
+  <div class="form-grid" style="margin-top: 16px; max-width: 520px">
+    <label>Сменить категорию у выбранных
+      <select name="category">{{ m.category_options(None, '— без категории —') }}</select>
+    </label>
+    <div><button>Применить</button></div>
+  </div>
+  {% else %}<div class="empty">Ничего не найдено</div>{% endif %}
+</form>
+{% endblock %}

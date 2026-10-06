@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% import '_macros.html' as m with context %}
+{% block title %}{{ day | day_title }} — Бюджет{% endblock %}
+{% block content %}
+{% set here = url_for('day_view', day=day) %}
+<div class="page-head">
+  <h1>{{ day | day_title }}</h1>
+  <span class="sub">{{ day[:4] }}</span>
+  <div class="pager">
+    <a class="button" href="{{ url_for('day_view', day=prev_day) }}">←</a>
+    <a class="button" href="{{ url_for('calendar_view', month=day[:7]) }}">Месяц</a>
+    <a class="button" href="{{ url_for('day_view', day=next_day) }}">→</a>
+  </div>
+</div>
+
+{% if stat %}
+<div class="grid tiles">
+  <div class="card tile">
+    <div class="label">Лимит дня</div>
+    <div class="value">{{ stat.limit | money }}</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Потрачено в бюджете</div>
+    <div class="value">{{ stat.spent | money }}</div>
+  </div>
+  <div class="card tile">
+    <div class="label">{{ 'Осталось' if stat.diff >= 0 else 'Перерасход' }}</div>
+    <div class="value {{ 'pos' if stat.diff >= 0 else 'neg' }}">{{ (stat.diff if stat.diff >= 0 else -stat.diff) | money }}</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Траты</h2>
+  {% if expenses %}
+  <table>
+    <thead><tr><th class="hide-sm">Время</th><th>Название</th><th>Категория</th><th class="num">Сумма</th></tr></thead>
+    <tbody>{{ m.expense_rows(expenses, next=here) }}</tbody>
+  </table>
+  {% else %}<div class="empty">В этот день трат нет</div>{% endif %}
+</div>
+
+<div class="card" id="add" style="margin-top: 16px">
+  <h2>Добавить трату</h2>
+  {{ m.expense_form(url_for('add_expense'), day, next=here) }}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  // «+ Трата» ведёт на #add — сразу ставим курсор в сумму
+  if (location.hash === "#add") document.querySelector("#add input[name=amount]").focus();
+</script>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Календарь — Бюджет{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ month | month_title }}</h1>
+  <div class="pager">
+    <a class="button" href="{{ url_for('calendar_view', month=prev_month) }}">←</a>
+    <a class="button" href="{{ url_for('calendar_view') }}">Сегодня</a>
+    <a class="button" href="{{ url_for('calendar_view', month=next_month) }}">→</a>
+  </div>
+</div>
+
+<div class="cal">
+  {% for wd in weekdays %}<div class="wd">{{ wd }}</div>{% endfor %}
+  {% for week in weeks %}{% for d in week %}
+    {% set key = d.isoformat() %}
+    {% set st = stats.get(key) %}
+    <a class="cell {{ 'other' if key[:7] != month }} {{ 'today' if key == today }}" href="{{ url_for('day_view', day=key) }}">
+      <span class="d">{{ d.day }}</span>
+      {% if key[:7] == month %}
+        {% if spent.get(key) %}<span class="spent">{{ spent[key] | money }}</span>{% endif %}
+        {% if over.get(key) %}<span class="lim">+{{ over[key] | money }} сверх</span>{% endif %}
+        {% if st %}
+          <span class="lim">лимит {{ st.limit | money }}</span>
+          {% if st.diff >= 0 %}<span class="st good">✓ −{{ st.diff | money }}</span>
+          {% else %}<span class="st bad">▲ +{{ (-st.diff) | money }}</span>{% endif %}
+        {% endif %}
+      {% endif %}
+    </a>
+  {% endfor %}{% endfor %}
+</div>
+<div class="cal-legend">
+  <span class="st good" style="color: var(--good-ink)">✓ −X — уложился, сэкономил X</span>
+  <span style="color: var(--critical)">▲ +X — перерасход X</span>
+  <span>Сумма в клетке — траты в бюджете; «сверх» — нерегулярные сверх бюджета</span>
+</div>
+{% endblock %}

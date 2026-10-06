@@ -1,0 +1,89 @@
+{% macro kind_badge(e) -%}
+  {% if e.kind == 'fixed' %}<span class="badge fixed">фикс.</span>
+  {% elif e.kind == 'irregular' and e.over_budget %}<span class="badge over">сверх бюджета</span>
+  {% elif e.kind == 'irregular' %}<span class="badge irregular">нерегулярная</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro category_options(selected, empty_label='— авто / без категории —') -%}
+  <option value="">{{ empty_label }}</option>
+  {% for c in settings.categories %}
+    <option value="{{ c.id }}" {{ 'selected' if c.id == selected }}>{{ c.name }}</option>
+  {% endfor %}
+{%- endmacro %}
+
+{% macro currency_options(selected) -%}
+  {% for cur in ['RSD', 'EUR', 'USD'] %}
+    <option value="{{ cur }}" {{ 'selected' if cur == selected }}>{{ cur }}</option>
+  {% endfor %}
+{%- endmacro %}
+
+{% macro amount(e) -%}
+  {{ e.amount_base | money }}
+  {% if e.currency != settings.base_currency %}<div class="muted" style="font-size:12px">{{ e.amount | money(e.currency) }}</div>{% endif %}
+{%- endmacro %}
+
+{# Форма траты: e — существующая трата (правка) или None (добавление). #}
+{% macro expense_form(action, day, e=None, next=None) -%}
+<form method="post" action="{{ action }}">
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  <div class="form-grid">
+    <label><span class="req">Сумма</span>
+      <input name="amount" required inputmode="decimal" value="{{ e.amount | num if e else '' }}">
+    </label>
+    <label><span class="req">Название</span>
+      <input name="name" required value="{{ e.name if e else '' }}">
+    </label>
+    <label>Валюта
+      <select name="currency">{{ currency_options(e.currency if e else settings.input_currency) }}</select>
+    </label>
+    <label>Дата
+      <input type="date" name="date" required value="{{ e.date if e else day }}">
+    </label>
+    <label>Время
+      <input type="time" name="time" value="{{ (e.time or '')[:5] if e else '' }}">
+    </label>
+    <label>Категория
+      <select name="category">{{ category_options(e.category if e else None) }}</select>
+    </label>
+    <label style="grid-column: span 2">Комментарий
+      <input name="note" value="{{ e.note if e else '' }}">
+    </label>
+  </div>
+  {% if not e or e.kind != 'fixed' %}
+  <div class="radio-row">
+    <label class="check"><input type="radio" name="kind" value="regular" {{ 'checked' if not e or e.kind == 'regular' }}> Регулярная</label>
+    <label class="check"><input type="radio" name="kind" value="irregular" {{ 'checked' if e and e.kind == 'irregular' }}> Нерегулярная</label>
+    <label class="check"><input type="checkbox" name="over_budget" {{ 'checked' if e and e.over_budget }}> Сверх бюджета</label>
+    <span class="muted" style="font-size:12px">(«сверх бюджета» действует только для нерегулярной)</span>
+  </div>
+  {% else %}
+  <p class="muted" style="font-size:13px">Фиксированная трата: правка суммы меняет только этот месяц.</p>
+  {% endif %}
+  <button class="primary">{{ 'Сохранить' if e else 'Добавить' }}</button>
+</form>
+{%- endmacro %}
+
+{% macro expense_rows(expenses, show_date=false, next=None) -%}
+  {% for e in expenses %}
+  <tr>
+    {% if show_date %}<td class="muted"><a href="{{ url_for('day_view', day=e.date) }}">{{ e.date }}</a></td>{% endif %}
+    <td class="muted hide-sm">{{ (e.time or '')[:5] }}</td>
+    <td>
+      {{ e.name }} {{ kind_badge(e) }}
+      {% if e.note %}<div class="muted" style="font-size:12px">{{ e.note }}</div>{% endif %}
+      <details class="edit">
+        <summary>изменить</summary>
+        {{ expense_form(url_for('edit_expense', expense_id=e.id), e.date, e, next) }}
+        <form method="post" action="{{ url_for('delete_expense', expense_id=e.id) }}" style="margin-top:8px"
+              onsubmit="return confirm('Удалить «{{ e.name }}»?')">
+          {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+          <button class="danger">Удалить</button>
+        </form>
+      </details>
+    </td>
+    <td class="muted">{{ category_names.get(e.category, 'Без категории') }}</td>
+    <td class="num">{{ amount(e) }}</td>
+  </tr>
+  {% endfor %}
+{%- endmacro %}
